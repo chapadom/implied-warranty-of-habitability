@@ -18,7 +18,7 @@
 library(tidyverse) # dplyr, readr, stringr, etc.
 library(lubridate) # working with dates (eg. as_date)
 
-iwh_dir <- "J:/DEPT/REUP/Projects/IWH project"
+iwh_dir <- ""
 
 
 # Import Sample Cases and Complaints ---------------------------------------------

@@ -1,0 +1,472 @@
+---
+title: "IWH Project Data Analysis - Part III"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+# Header ------------------------------------------------------------------
+
+# GitHub/iwh/05_iwh-data-analysis.Rmd
+
+# PROJECT: Implied Warranty of Habitability - Data Analysis, Part III
+# AUTHOR: Mili Chapado
+# DATE: 2018-11-08
+
+# PURPOSE: Data analysis for IWH
+
+# DETAILS: Each question is answered in its own code chunk right below (in some cases right above, due to formatting). 
+# To avoid mistakenly passing previous filters, mutates, etc. on to the next question, all chunks
+# begin with the entire sample507 dataset, then relevant code for that question is used as needed.
+
+# Setup -------------------------------------------------------------------
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(janitor)
+library(naniar)
+library(lubridate)
+library(scales)
+
+iwh_dir <- ""
+
+# one date was omitted because it was missing the year
+sample507 <- str_glue("{iwh_dir}/Data/Clean/Viol Sample/cases_info_sample_viol_507.csv") %>%
+  read_csv(na = c("", "NA", "N/A")) %>%
+  clean_names() %>%
+  mutate(abatement = case_when(abatement == "NO" ~ "No", TRUE ~ abatement),
+         date_of_stip = case_when(date_of_stip == "6/2/0106" ~ "", TRUE ~ date_of_stip))
+
+# import cases from first analysis to use for question 9
+cases_all_info <- str_glue("{iwh_dir}/Data/Clean/Sample Cases/cases_info_violations_complaints_summary.csv") %>%
+  read_csv(na = c("", "NA", "N/A", "N/A (No stip)")) %>%
+  clean_names() %>%
+  mutate(repairs_in_stip = case_when(repairs_in_stip == "Ues" ~ "Yes", 
+                                   TRUE ~ repairs_in_stip)) %>%
+  replace_na(list(n_b_viols = 0, n_c_viols = 0, n_total_comp = 0))
+
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+		knitr::opts_chunk$set(
+		  echo = FALSE,
+			message=FALSE,
+			warning=FALSE, 
+			paged.print=FALSE
+		)
+```
+
+**III.	What happens with cases where there are current open B and C class violations in the apartment ? Are the outcomes in these cases any different than the outcomes of cases with no conditions issues apparent ?**
+
+To answer this question we will match the complete nonpayment eviction dataset with the HPD violation dataset to identify all cases with open violations at the time of filing. We will then pull a random sample of those cases to do additional analysis. Some issues to look at: 
+
+1.	What percentage of cases are in rent-regulated apartments? 
+*In Column B (rent_reg), % Yes vs. N/A vs. No*
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+p_rent_reg <- sample507 %>%
+  tabyl(rent_reg) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+  
+kable(p_rent_reg, format = "markdown")
+```
+
+2.	In what percentage of these cases are repairs asserted in the answer? 
+*In Column D (repairs_in_answer), % Yes vs. No*
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+p_repairs_ans <- sample507 %>%
+  tabyl(repairs_in_answer) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+  
+kable(p_repairs_ans, format = "markdown")
+```
+
+3.	In what percentage of these cases are repairs included in the stipulation? 
+*In Column J, % Yes vs. No*
+(NOTE: Please remove N/A entries from this calculation, so that %Yes = Yes/(Yes + No) and % No = No/(Yes + No))
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+# creating two different tables to account for values other than yes/no/na
+p_repairs_stip <- sample507 %>%
+  tabyl(repairs_in_stip) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(p_repairs_stip, format = "markdown")
+
+p_repairs_stip2 <- sample507 %>%
+  filter(repairs_in_stip %in%  c("Yes", "No")) %>%
+  tabyl(repairs_in_stip) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(p_repairs_stip2, format = "markdown")
+
+```
+
+4.	In what percentage of these cases is an abatement awarded? 
+*In Column N, % Yes vs. No*
+(NOTE: Please remove N/A entries from this calculation, 
+so that %Yes = Yes/(Yes + No) and % No = No/(Yes + No))
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+# creating two different tables to account for values other than yes/no/na
+p_abatement <- sample507 %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+  
+p_abatement_ <- sample507 %>%
+  filter(abatement %in% c("Yes", "No")) %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+
+kable(p_abatement, format = "markdown")
+kable(p_abatement_, format = "markdown")
+
+```
+
+5.	What is the average dollar amount of an abatement? 
+*Average of the amounts in Column O, meaning sum of all amounts listed divided by number of entries*
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+# how to in tidyverse
+sample507$abatement_amt = as.numeric(gsub("[\\$,]", "", sample507$abatement_amt))
+
+avg_abatement_amt <- sample507 %>%
+  summarise(avg_abatement_amt = mean(abatement_amt, na.rm = TRUE))
+```
+`r avg_abatement_amt`
+
+6.	In what percentage of cases is there a record of the violations in the file? 
+*In Column P, % Yes vs. No*
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+p_viol_record_in_file <- sample507 %>%
+  tabyl(viol_record_in_file) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+  
+kable(p_viol_record_in_file, format = "markdown")
+```
+
+7.	In what percentage of cases did the court order an inspection? 
+*In Column S, % Yes vs. No*
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+p_insp_ordered <- sample507 %>%
+  tabyl(insp_ordered) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+  
+kable(p_insp_ordered, format = "markdown")
+```
+
+8.	What are the outcomes of cases?
+
+a.	What percentage have judgments? 
+*% with Yes in Column H*
+(NOTE: remove cases with DISCON or DEFAULT in Column H, so calculate % based only on cases with Column H Yes or No responses)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+# creating two different tables to account for values other than yes/no/na
+
+p_judgment <- sample507 %>%
+  tabyl(judgment) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(p_judgment, format = "markdown")
+
+p_judgment2 <- sample507 %>%
+  filter(judgment %in% c("Yes", "No")) %>%
+  tabyl(judgment) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(p_judgment2, format = "markdown")
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+na_strings <-  c("UNCLEAR", "UNCLEEAR", "DISCON", "DISCOn", "PAY AGREEMENT","pay agreement", "DEFAULT", "MOVE OUT", "TRIAL", "Yes", "DISMISSED", "DECEASED", "7078", "HOLDOVER")
+
+avg_days_to_pay1 <- sample507 %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% na_strings) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay1 = mean(as.numeric(days_to_pay)))
+```
+
+b.	What is the average length of time to pay? 
+*Average amt in Column G*
+`r avg_days_to_pay1`
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay2 <- sample507 %>%
+  filter(judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% na_strings) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay2 = mean(as.numeric(days_to_pay)))
+```
+c.	When these cases have judgments, what is average length of time to pay? 
+*Of cases with Yes in Column H, average amt in Column G*
+`r avg_days_to_pay2`
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay3 <- sample507 %>%
+  filter(judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% na_strings) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay3 = mean(as.numeric(days_to_pay)))
+```
+d.	When these cases do not have judgments, what is average length of time to pay? 
+*Of cases with Yes in Column J and No in Column H, average amt in Column G*
+`r avg_days_to_pay3`
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+# Dropped cases: Five cases had the answer date after the stip date, so dropped those to calculate the average time with just the cases that had date of stip following answer date.
+# One case had a stip date in 2019.
+
+na_strings2 <-  c("DEFAULT", "TRIAL", "UNCLEAR", "DISMISSED", "DISCON", "DECEASED")
+drop_cases <-  c("LT-065141-16/KI", "LT-058073-16/KI", "LT-081912-16/KI", "LT-097561-16/KI", "LT-071545-16/BX", "LT-085568-16/KI")
+
+avg_days_ans_to_stip <- sample507 %>%
+  filter(repairs_in_stip %in% c("Yes"), !(formattedindexnumber %in% drop_cases)) %>%
+  replace_with_na_at(.vars = c("date_answer"), condition = ~.x %in% na_strings2) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+         days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days")) %>%
+  drop_na(days_ans_to_stip) %>%
+  summarise(avg_days_ans_to_stip = mean(days_ans_to_stip))
+```
+e.	What is the average length of time from answer date to stip? 
+*Of cases with Yes in Column J, length of time between date in Column C (date_answer) and date in Column F (date_of_stip)*
+# 5 cases had date of answer after date of stip
+`r avg_days_ans_to_stip`
+
+
+9.	Are the outcomes in these cases statistically significantly different than cases with no conditions issues apparent 
+(i.e., cases with no conditions issues apparent in the first set of files analyzed)? 
+
+Is there a statistically significant difference between the outcomes in:
+
+-II(1)(a) and III(8)(a)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_judgment_no_bad_conditions <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"),
+         judgment %in% c("Yes", "No")) %>%
+  transmute(judgment = if_else(judgment == "Yes", TRUE, FALSE)) %>%
+  summarise(judgment_yes = sum(judgment), judgment_no = n() - judgment_yes)
+
+
+t_judgment_507 <- sample507 %>%
+  filter(judgment %in% c("Yes", "No")) %>%
+  transmute(judgment = if_else(judgment == "Yes", TRUE, FALSE)) %>%
+  summarise(judgment_yes = sum(judgment), judgment_no = n() - judgment_yes)
+
+test_5 <- bind_rows(t_judgment_no_bad_conditions, t_judgment_507)
+
+chisq.test(test_5, correct = FALSE)
+
+```
+
+
+-II(1)(b) and III(8)(b)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_to_pay <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay) 
+
+t_avg_days_to_pay1 <- sample507 %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("UNCLEAR", "UNCLEEAR", "DISCON", "DISCOn", "PAY AGREEMENT","pay agreement", "DEFAULT", "MOVE OUT", "TRIAL", "Yes", "DISMISSED", "DECEASED", "7078", "HOLDOVER")) %>%
+  drop_na(days_to_pay)
+
+t.test(as.numeric(t_avg_days_to_pay$days_to_pay), as.numeric(t_avg_days_to_pay1$days_to_pay))
+```
+
+-II(1)(c) and III(8)(c)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_to_pay2 <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay)
+
+t_avg_days_to_pay3 <- sample507 %>%
+  filter(judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("UNCLEAR", "UNCLEEAR", "DISCON", "DISCOn", "PAY AGREEMENT","pay agreement", "DEFAULT", "MOVE OUT", "TRIAL", "Yes", "DISMISSED", "DECEASED", "7078", "HOLDOVER")) %>%
+  drop_na(days_to_pay)
+
+t.test(as.numeric(t_avg_days_to_pay2$days_to_pay), as.numeric(t_avg_days_to_pay3$days_to_pay))
+
+```
+
+-II(1)(d) and III(8)(d)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+t_avg_days_to_pay4 <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay)
+
+t_avg_days_to_pay5 <- sample507 %>%
+  filter(judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("UNCLEAR", "UNCLEEAR", "DISCON", "DISCOn", "PAY AGREEMENT","pay agreement", "DEFAULT", "MOVE OUT", "TRIAL", "Yes", "DISMISSED", "DECEASED", "7078", "HOLDOVER")) %>%
+  drop_na(days_to_pay)
+
+t.test(as.numeric(t_avg_days_to_pay4$days_to_pay), as.numeric(t_avg_days_to_pay5$days_to_pay))
+
+```
+
+-II(1)(e) and III(8)(e)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_ans_to_stip1 <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), !(date_of_stip %in% c("DEFAULT", "UNCLEAR", "DISMISSED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+         days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days"))
+
+t_avg_days_ans_to_stip2 <- sample507 %>%
+  filter(repairs_in_stip %in% c("Yes"), !(date_of_stip %in% c("DEFAULT", "TRIAL", "UNCLEAR", "DISMISSED", "DISCON", "DECEASED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+         days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days")) %>%
+  drop_na(date_answer)
+
+t.test(as.numeric(t_avg_days_ans_to_stip1$days_ans_to_stip), as.numeric(t_avg_days_ans_to_stip2$days_ans_to_stip))
+
+```
+
+
+10.	What is the average number of violations that exists in each apartment in this dataset? 
+
+a.	Average number of total violations (a, b, and c combined)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_total_viol <- sample507 %>%
+  group_by(formattedindexnumber) %>%
+  mutate(total_viol = sum(n_a_viols, n_b_viols, n_c_viols)) %>%
+  ungroup() %>%
+  summarise(avg_total_viol = mean(total_viol))
+```
+`r avg_total_viol`
+
+
+b.	Average number of “a" violations per case 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_a_viol <- sample507 %>%
+  summarise(avg_a_viol = mean(n_a_viols))
+```
+`r avg_a_viol`
+
+c.	Average number of “b" violations per case
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_b_viol <- sample507 %>%
+  summarise(avg_b_viol = mean(n_b_viols))
+```
+`r avg_b_viol`
+
+d.	Average number of “c" violations per case
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_c_viol <- sample507 %>%
+  summarise(avg_c_viol = mean(n_c_viols))
+```
+`r avg_c_viol`
+
+
+11.	How much does representation matter? 
+
+a.	Of cases with Yes in Column Q, % Yes in Column N
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+yes_rep <- sample507 %>%
+  filter(represented == "Yes") %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(yes_rep, format = "markdown")
+```
+
+
+b.	Of cases with No in Column Q, % Yes in Column N
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+no_rep <- sample507 %>%
+  filter(represented == "No") %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(no_rep, format = "markdown")
+```
+
+
+There is also a lot of possibility for descriptive analysis with this data matching, e.g., what percentage of nonpayment cases have open violations? Where are those cases located? Question: how do we deal with the possibility that a violation is “open" but is actually resolved, just hasn’t been cleared?
+
+
+Follow-Up, Dec 2018:
+
+-in the first dataset, comparison of "yes" percentage rate in II.2 (repairs in stip = yes), with "yes" percentage rate of abatements in cases with no conditions issues present (not yet calculated, but calculated as: of cases with No in Column D, No in Column J, 0 in Column S, and 0 in Column T, % Yes in Column N)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+test_1 <- cases_all_info %>% 
+  filter(repairs_in_stip == "Yes") %>% 
+  transmute(abatement = if_else(abatement == "Yes", TRUE, FALSE)) %>% 
+  summarise(
+    abatement = sum(abatement, na.rm = TRUE),
+    no_abatement = n() - abatement
+  )
+  
+test_2 <- cases_all_info %>%
+  filter(n_b_viols == 0, n_c_viols == 0, repairs_in_answer == "No", repairs_in_stip == "No") %>%
+  transmute(abatement = if_else(abatement == "Yes", TRUE, FALSE)) %>% 
+  summarise(
+    abatement = sum(abatement, na.rm = TRUE),
+    no_abatement = n() - abatement
+  )
+
+# Fisher's Exact Tests
+test_1 %>% 
+  bind_rows(test_2) %>% 
+  fisher.test()
+
+```
+
+
+-in the first dataset, comparison of "yes" percentage rate in cases with repairs in multiple stips and in answer with "yes" percentage rate of abatements in cases with no conditions issues present. 
+This means comparing: [of cases with Yes in Column D and Yes in Column M, % Yes in Column N] with [of cases with No in Column D, No in Column J, 0 in Column S, and 0 in Column T, % Yes in Column N]
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+test_3 <- cases_all_info %>%
+  filter(repairs_in_answer == "Yes", repairs_in_multiple_stips_stip_osc == "Yes") %>%
+  transmute(abatement = if_else(abatement == "Yes", TRUE, FALSE)) %>% 
+  summarise(
+    abatement = sum(abatement, na.rm = TRUE),
+    no_abatement = n() - abatement
+  )
+
+test_3 %>% 
+  bind_rows(test_2) %>% 
+  fisher.test()
+
+```
+
+
+-comparison of "yes" percentage rate of abatements in violation dateset (item 4: In what percentage of these cases is an abatement awarded?) with "yes" percentage in cases with no conditions present in first dataset [of cases with No in Column D, No in Column J, 0 in Column S, and 0 in Column T, % Yes in Column N]
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+test_4 <- cases_all_info %>% 
+  transmute(abatement = if_else(abatement == "Yes", TRUE, FALSE)) %>% 
+  summarise(
+    abatement = sum(abatement, na.rm = TRUE),
+    no_abatement = n() - abatement
+  )
+
+test_4 %>% 
+  bind_rows(test_2) %>% 
+  fisher.test()
+```
+
+
+

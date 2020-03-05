@@ -1,0 +1,733 @@
+---
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+# Header ------------------------------------------------------------------
+
+# GitHub/iwh/05_iwh-data-analysis.Rmd
+
+# PROJECT: Implied Warranty of Habitability - Data Analysis, Parts I & II
+# AUTHOR: Mili Chapado
+# DATE: 2018-09-18
+
+# PURPOSE: Data analysis for IWH
+
+# DETAILS: Each question is answered in its own code chunk right below (in some cases right above, due to formatting). 
+# To avoid mistakenly passing previous filters, mutates, etc. on to the next question, all chunks
+# begin with the entire cases_all_info data, then relevant code for that question is used as needed.
+
+# Setup -------------------------------------------------------------------
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(janitor)
+library(naniar)
+library(lubridate)
+library(scales)
+
+iwh_dir <- ""
+
+cases_all_info <- str_glue("{iwh_dir}/Data/Clean/Sample Cases/cases_info_violations_complaints_summary.csv") %>%
+  read_csv(na = c("", "NA", "N/A", "N/A (No stip)")) %>%
+  clean_names() %>%
+  mutate(repairs_in_stip = case_when(repairs_in_stip == "Ues" ~ "Yes", 
+                                   TRUE ~ repairs_in_stip))
+
+
+cases_all_info$n_b_viols <- replace_na(cases_all_info$n_b_viols, 0)
+cases_all_info$n_c_viols <- replace_na(cases_all_info$n_c_viols, 0)
+cases_all_info$n_total_comp <- replace_na(cases_all_info$n_total_comp, 0)
+
+
+```
+
+---
+title: "IWH Project Data Analysis"
+output:
+  html_notebook: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+editor_options:
+  chunk_output_type: inline
+---
+
+**I.	Descriptive stats related to the presence of conditions-related issues in nonpayment cases: To what extent do tenants facing nonpayment eviction cases appear to experience substandard conditions? To what extent and how are substandard conditions a part of nonpayment eviction cases?**
+
+
+1.	Overall percentage of cases with abatements   
+*Column N (Abatement): % Yes, % No*  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abatement <- cases_all_info %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+  
+kable(abatement, format = "markdown")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_abatement_amt <- cases_all_info %>%
+  summarise(avg_abatement_amt = mean(abatement_amt, na.rm = TRUE))
+```
+
+1a.	Average amount of abatements  
+*Column O (abatement_amt)*  
+`r avg_abatement_amt`  
+
+1b.	Represented vs unrepresented  
+*Of cases with Yes in column N (abatement),  % Yes in Column R (represented), % No in Column R.*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+represented <- cases_all_info %>%
+  filter(abatement == "Yes") %>%
+  tabyl(represented) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(represented, format = "markdown")
+```
+
+2.	Percentage of cases with repairs asserted in answer  
+*Column D (repairs_in_answer): % Yes, % No*  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs <- cases_all_info %>%
+  tabyl(repairs_in_answer) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+
+kable(repairs, format = "markdown")
+```
+
+3.	Percentage of cases alleging service defect  
+*Column E (service_defect): % Yes, % No*  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+service_defense <- cases_all_info %>%
+ tabyl(service_defense) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+
+kable(service_defense, format = "markdown")
+```
+
+4.	Percentage of cases with repairs included in first stip  
+*Column J (repairs_in_stip): % Yes, % No, % N/A; Column J: Removing N/A, % Yes, % No*  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+#includes yes, no, default, holdover, ues, unclear
+repairs_in_stip <- cases_all_info %>%
+  tabyl(repairs_in_stip) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+
+kable(repairs_in_stip, format = "markdown")
+
+```
+
+4a.	Location of these cases? in what boroughs/zip codes are they most heavily concentrated? How does this distribution match up with the distribution of eviction filings overall? (TBD)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+# "these" cases? location of cases with yes repairs in first stip?
+# would need to join addresses back to data to answer this
+
+```
+
+4b.	NYCHA vs. non-NYCHA:   
+*i) Of cases with “Yes" response in Column Q (nycha), % Yes, % No, % N/A in Column J (repairs_in_stip)*   
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_nycha_yes <- cases_all_info %>%
+  filter(nycha == "Yes") %>%
+ tabyl(repairs_in_stip) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_nycha_yes, format = "markdown")
+```
+
+*ii) Of cases with “No" response in Column Q (nycha), % Yes, % No, % N/A in Column J (repairs_in_stip)*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_nycha_no <- cases_all_info %>%
+  filter(nycha == "No") %>%
+ tabyl(repairs_in_stip) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_nycha_no, format = "markdown")
+```
+
+4c.	Difference among represented vs. unrepresented?  
+*i) Of cases with “Yes" in Column R (represented): % Yes, % No, % N/A in Column J (repairs_in_stip)*    
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_rep_yes <- cases_all_info %>%
+  filter(represented == "Yes") %>%
+ tabyl(repairs_in_stip) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_rep_yes, format = "markdown")
+```
+
+*ii) Of cases with “No" in Column R (represented): % Yes in Column J, % No in Column J (repairs_in_stip)*    
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_rep_no <- cases_all_info %>%
+  filter(represented == "No") %>%
+ tabyl(repairs_in_stip) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_rep_no, format = "markdown")
+```
+
+5.	Percentage of cases with open violations:  
+*% cases with any number >0 in columns S OR T; % 0 in columns S and T*  
+5a.	C class - Column S: % cases > 0, % 0  
+5b.	B class - Column T: % cases > 0, % 0  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+cases_b_or_c_viols <- cases_all_info %>%
+  mutate(yes_any_viol = (n_c_viols > 0 | n_b_viols > 0),
+         no_viol = (n_c_viols == 0 & n_b_viols == 0),
+         yes_b_viol = n_b_viols > 0,
+         yes_c_viol = n_c_viols > 0,
+         no_b_viol = n_b_viols == 0,
+         no_c_viol = n_c_viols == 0) %>%
+  summarise(open_any_viol = sum(yes_any_viol == TRUE)/745,
+            no_open_viol = sum(no_viol == TRUE)/745,
+            open_b_viol = sum(yes_b_viol == TRUE)/745,
+            open_c_viol = sum(yes_c_viol == TRUE)/745,
+            no_b_viol = sum(no_b_viol == TRUE)/745,
+            no_c_viol = sum(no_c_viol == TRUE)/745)
+
+kable(cases_b_or_c_viols, format = "markdown")
+```
+
+6.	Percentage of cases with repairs in answer AND stip:  
+*% cases with Yes in Column D (repairs_in_answer) and Yes in Column J (repairs_in_stip)*  
+(NOTE: remove any cases from percentage calculation that have “N/A" in Column J, e.g., if there are 100 cases total and 20 have N/A in Column J, the calculation should be based on the 80 remaining cases only)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_and_ans <- cases_all_info %>%
+  drop_na(repairs_in_stip) %>%
+  mutate(repairs_in_stip_and_ans_yes = repairs_in_stip %in% c("Yes") & repairs_in_answer %in% c("Yes")) %>%
+  tabyl(repairs_in_stip_and_ans_yes) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_and_ans, format = "markdown")
+```
+
+7.	Percentage of cases with repairs in stip AND open B/C violation:  
+*% cases with Yes in Column J (repairs_in_stip) and >0 in Column S or > 0 in Column T*   
+(NOTE: same as in No. 6 above - remove cases with N/A in Column J)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_and_viols <- cases_all_info %>%
+  drop_na(repairs_in_stip) %>%
+  mutate(repairs_in_stip_and_viols = repairs_in_stip %in% c("Yes") & (n_b_viols > 0 | n_c_viols > 0)) %>%
+  tabyl(repairs_in_stip_and_viols) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_and_viols, format = "markdown")
+```
+
+
+8.	Percentage of cases with repairs in answer AND stip AND open B/C violation  
+*% cases with Yes in Column D (repairs_in_answer) and Yes in Column J (repairs_in_stip) and > 0 in Column S or > 0 in Column T*   
+(NOTE: same as in No. 6 above remove cases with N/A in Column J)
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_ans_viols <- cases_all_info %>%
+  drop_na(repairs_in_stip) %>%
+  mutate(repairs_in_stip_ans_viols = repairs_in_stip %in% c("Yes") & repairs_in_answer %in% c("Yes") & (n_b_viols > 0 | n_c_viols > 0)) %>%
+  tabyl(repairs_in_stip_ans_viols) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_ans_viols, format = "markdown")
+```
+
+9.	Percentage of cases with repairs in answer OR stip OR open violation   
+*% cases with either Yes in Column D (repairs_in_answer) OR Yes in Column J (repairs_in_stip) OR >0 in Column S or > 0 in Column T*  
+(NOTE: this is the total percentage so there shouldn’t be any double counting. Cases with N/A in Column J should be included) 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_ans_viols2 <- cases_all_info %>%
+  drop_na(repairs_in_stip) %>%
+  mutate(repairs_in_stip_ans_viols2 = repairs_in_stip %in% c("Yes") | repairs_in_answer %in% c("Yes") | (n_b_viols > 0 | n_c_viols > 0)) %>%
+  tabyl(repairs_in_stip_ans_viols2) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_ans_viols2, format = "markdown")
+```
+
+10.	Of cases with repairs in stips, what percentage have repairs asserted in multiple stips?  
+*Of cases with Yes in Column J (repairs_in_stip) and Yes in Column L (multiple_stips), % Yes in Column M (repairs_in_multiple_stips)*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_mult_stips <- cases_all_info %>%
+  filter(repairs_in_stip == "Yes" & multiple_stips == "Yes") %>%
+  mutate(repairs_in_mult_stips = repairs_in_multiple_stips_stip_osc %in% c("Yes")) %>%
+  tabyl(repairs_in_mult_stips) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_mult_stips, format = "markdown")
+```
+
+11.	Of cases with repairs in stips, what percentage have complained to HPD?  
+*Of cases with Yes in Column J (repairs_in_stip), % >0 in Column AA (n_total_comp)* 
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_hpd_comp <- cases_all_info %>%
+  filter(repairs_in_stip == "Yes") %>%
+  mutate(repairs_in_stip_hpd_comp = n_total_comp > 0) %>%
+  tabyl(repairs_in_stip_hpd_comp) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_hpd_comp, format = "markdown")
+```
+
+12.	Of cases with repairs in stips and no open violations or HPD complaints, in what percentage does the judge order an HPD inspection?  
+*Of cases with Yes in Column J and 0 in Column S and 0 in Column T and 0 in Column AA, % Yes in Column P (court_insp)*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+repairs_in_stip_hpd_insp <- cases_all_info %>%
+  filter(repairs_in_stip == "Yes" & n_total_comp == 0 & n_c_viols == 0 & n_b_viols == 0) %>%
+  mutate(repairs_in_stip_hpd_insp = court_insp %in% c("Yes")) %>%
+  tabyl(repairs_in_stip_hpd_insp) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(repairs_in_stip_hpd_insp, format = "markdown")
+```
+
+***  
+
+**II.	Is the IWH operating as a defense/counterclaim in nonpayment eviction cases? E.g., are tenants who appear to have experienced substandard conditions actually receiving any sort of benefit from that fact in their eviction cases?**  
+
+**There are multiple ways a “benefit" could accrue to a tenant as a result of the landlord breaching the IWH.**  
+
+**First, the tenant could receive a rent abatement. To figure out whether tenants with potential IWH claims are in fact receiving abatements, we calculate the percentage of such tenants that received abatements. Because “tenants with potential IWH claims" is uncertain based on the data we have, we make this calculation with a number of different approximations of that class of tenants.  We calculate the percentage of cases with abatements for the following groups of tenants:**  
+
+1.	Tenants with repairs asserted in answer   
+*Of cases with Yes in Column D (repairs_in_answer),  % Yes in Column N (abatement)*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abt_repairs_in_ans <- cases_all_info %>%
+  filter(repairs_in_answer == "Yes") %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(abt_repairs_in_ans, format = "markdown")
+```
+
+2.	Tenants with repairs included in stip  
+*Of cases with Yes in Column J (repairs_in_stip),  % Yes in Column N (abatement)*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abt_repairs_in_stip <- cases_all_info %>%
+  filter(repairs_in_stip == "Yes") %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(abt_repairs_in_stip, format = "markdown")
+```
+
+3.	Tenants with repairs included in multiple stips  
+*Of cases with Yes in Column M (repair_in_multiple_stips), % Yes in Column N (abatement)*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abt_repairs_in_mult_stip <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc == "Yes") %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(abt_repairs_in_mult_stip, format = "markdown")
+```
+
+4.	Tenants with repairs included in answer and stip  
+*Of cases with Yes in Column D and Column J, % Yes in Column N*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abt_repairs_in_ans_stip <- cases_all_info %>%
+  filter(repairs_in_answer == "Yes" & repairs_in_stip == "Yes") %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(abt_repairs_in_ans_stip, format = "markdown")
+```
+
+5.	Tenants with open violations  
+*Of cases with >0 in Column S or >0 in Column T, % Yes in Column N*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abt_viols <- cases_all_info %>%
+  mutate(open_viols = (n_b_viols > 0 | n_c_viols > 0)) %>%
+  filter(open_viols == TRUE) %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(abt_viols, format = "markdown")
+```
+
+6.	Tenants with open violations and stip and answer   
+*Of cases with >0 in Column S or >0 in Column T and Yes in Column J and Yes in Column D, % Yes in Column N*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abt_viols_stip_ans <- cases_all_info %>%
+  mutate(open_viols = (n_b_viols > 0 | n_c_viols > 0)) %>%
+  filter(open_viols == TRUE, repairs_in_answer %in% c("Yes"), repairs_in_stip %in% c("Yes")) %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(abt_viols_stip_ans, format = "markdown")
+```
+
+7.	Tenants with open violations OR stip OR answer  
+*Of cases with >0 in Column S or >0 in Column T or Yes in Column J or Yes in Column D, % Yes in Column N*  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+abt_viols_stip_ans2 <- cases_all_info %>%
+  mutate(open_viols = (n_b_viols > 0 | n_c_viols > 0)) %>%
+  filter(open_viols == TRUE | repairs_in_answer %in% c("Yes") | repairs_in_stip %in% c("Yes")) %>%
+  tabyl(abatement) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(abt_viols_stip_ans2, format = "markdown")
+```
+
+***
+
+**Second, the tenant could be using the IWH violation as leverage to (a) avoid a possessory judgment, and/or (b) extend the length of time to pay the rental arrears. We thus want to compare the cases of tenants who do not appear to experience substandard conditions with the cases of those who do and determine if there is a statistically significant difference in outcomes (a) and (b).  However, it is important to control for the fact that in general, (a) and (b) are negotiated together and have an inverse relationship.  That is, non-judgment stipulations are typically “traded" for shorter time periods to pay, and judgments are exchanged for longer pay periods. Thus, the two outcomes need to be analyzed both separately together, as we want to understand if the negotiation outcomes as a whole are any different for tenants who have experienced substandard conditions. I’m trying to appropriately account for the possibility that, for example, tenants with bad conditions may be more likely to receive non-judgment stips than tenants without bad conditions, but if those tenants are also receiving less time to pay, they’re not really “getting anything" (or getting much) from the IWH claim. There also might be reasons why tenants with bad conditions are more inclined to shorter pay periods - for example, they are genuinely withholding rent and have the money. While I think we do want to know separately (1) whether the incidence of judgments is different for tenants with and without bad conditions, and (2) whether the length of time to pay is different for tenants with and without bad conditions, I think additional questions we should ask are: Are tenants with bad conditions more likely to receive non-judgment stips with longer pay periods as compared to tenants who do not have bad conditions who receive non-judgment stips? When tenants with bad conditions negotiate judgment stips, do they have longer pay periods as compared to tenants who do not have bad conditions who negotiate judgment stips? Does representation make a difference (there are selection bias problems with this analysis to some extent - counsel wasn’t randomly assigned - but still interesting to know whether the outcomes are different)? Do NYCHA cases look any different?**   
+
+1.	Of cases that have no bad conditions, what are outcomes?  
+
+a.	What percentage have judgments?   
+*Of cases with No in Column D and No in Column J and 0 in Column S and 0 in Column T, % with Yes in Column H (judgment)*  
+(NOTE: remove cases with DISCON or DEFAULT in Column H, so only calculate % based on cases with Column H Yes or No responses)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+judgment_no_bad_conditions <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), judgment %in% c("Yes", "No")) %>%
+  tabyl(judgment) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(judgment_no_bad_conditions, format = "markdown")
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay = mean(as.numeric(days_to_pay)))
+```
+b.	What is the average length of time to pay?  
+*Of cases with No in Column D and No in Column J and 0 in Column S and 0 in Column T, average amt in Column G (days_to_pay)*  
+`r avg_days_to_pay`    
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay2 <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"),
+         judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay2 = mean(as.numeric(days_to_pay)))
+```
+c.	When these cases have judgments, what is average length of time to pay?   
+*Of cases with No in Column D and No in Column J and 0 in Column S and 0 in Column T and Yes in Column H, average amt in Column G*  
+`r avg_days_to_pay2`  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay3 <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"),
+         judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay3 = mean(as.numeric(days_to_pay)))
+```
+d.	When these cases do not have judgments, what is average length of time to pay?   
+*Of cases with No in Column D and No in Column J and 0 in Column S and 0 in Column T and No in Column H, average amt in Column G*  
+`r avg_days_to_pay3`  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+# a couple of cases have answers before stips (example -20 days) - not sure if typo or accurate, and if we should count towards average
+avg_days_ans_to_stip <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), !(date_of_stip %in% c("DEFAULT", "UNCLEAR", "DISMISSED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+    days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days")) %>%
+  summarise(avg_days_ans_to_stip = mean(days_ans_to_stip))
+```
+e.	What is the average length of time from answer date to stip?   
+*Of cases with No in Column D and No in Column J and 0 in Column S and 0 in Column T, length of time between date in Column C and date in Column F*   
+`r avg_days_ans_to_stip`  
+
+
+2.	Of cases with bad conditions, what are outcomes?   
+
+i.	Bad conditions in stip  
+
+a.	What percentage have judgments?   
+*Of cases with Yes in Column J, % with Yes in Column H*  
+(NOTE: remove cases with DISCON or DEFAULT in Column H, so calculate % based only on cases with Column H Yes or No responses)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+judgment_bad_conditions <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes"), judgment %in% c("Yes", "No")) %>%
+  tabyl(judgment) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(judgment_bad_conditions, format = "markdown")
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay4 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay4 = mean(as.numeric(days_to_pay)))
+```
+b.	What is the average length of time to pay?   
+*Of cases with Yes in Column J, average amt in Column G*  
+`r avg_days_to_pay4`  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay5 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes"), judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay5 = mean(as.numeric(days_to_pay)))
+
+```
+c.	When these cases have judgments, what is average length of time to pay?   
+*Of cases with Yes in Column J and Yes in Column H, average amt in Column G*  
+`r avg_days_to_pay5`  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay6 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes"), judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay6 = mean(as.numeric(days_to_pay)))
+```
+d.	When these cases do not have judgments, what is average length of time to pay?  
+*Of cases with Yes in Column J and No in Column H, average amt in Column G*  
+`r avg_days_to_pay6`  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_ans_to_stip2 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes"), !(date_of_stip %in% c("DEFAULT", "UNCLEAR", "DISMISSED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+    days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days")) %>%
+  drop_na(date_answer) %>%
+  summarise(avg_days_ans_to_stip2 = mean(days_ans_to_stip))
+
+```
+e.	What is the average length of time from answer date to stip?  
+*Of cases with Yes in Column J, length of time between date in Column C and date in Column F*
+`r avg_days_ans_to_stip2`  
+
+ii. Bad conditions in multiple stips and answer  
+
+a.	What percentage have judgments?   
+*Of cases with Yes in Column M and Yes in Column D, % with Yes in Column H*  
+(NOTE: remove cases with DISCON or DEFAULT in Column H, so calculate % based only on cases with Column H Yes or No responses)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+judgment_bad_conditions_mult_stip <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes"), judgment %in% c("Yes", "No")) %>%
+  tabyl(judgment) %>%
+  adorn_totals(c("row")) %>%
+  adorn_pct_formatting(rounding = "half up", digits = 2)
+kable(judgment_bad_conditions_mult_stip, format = "markdown")
+```
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay7 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay7 = mean(as.numeric(days_to_pay)))
+```
+b.	What is the average length of time to pay?   
+*Of cases with Yes in Column M and Yes in Column D, average amt in Column G*
+`r avg_days_to_pay7`  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay8 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes"), judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay8 = mean(as.numeric(days_to_pay)))
+```
+c.	When these cases have judgments, what is average length of time to pay?  
+*Of cases with Y in Column M and Yes in Column D and Yes in Column H, average amt in Column G*   
+`r avg_days_to_pay8`  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_to_pay9 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes"), judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) %>%
+  summarise(avg_days_to_pay9 = mean(as.numeric(days_to_pay)))
+```
+d.	When these cases do not have judgments, what is average length of time to pay?  
+*Of cases with Y in Column M and Yes in Column D and No in Column H, average amt in Column G*   
+`r avg_days_to_pay9`  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+avg_days_ans_to_stip3 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes"), !(date_of_stip %in% c("DEFAULT", "UNCLEAR", "DISMISSED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+    days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days")) %>%
+  drop_na(date_answer) %>%
+  summarise(avg_days_ans_to_stip3 = mean(days_ans_to_stip))
+```
+e.	What is the average length of time from answer date to stip?   
+*Of cases with Yes in Column M and Yes in Column D, length of time between date in Column C and date in Column F*  
+`r avg_days_ans_to_stip3`  
+
+
+3.	Are these outcomes statistically significant?   
+Is there a statistically significant difference between the outcomes in:  
+
+(1)(a) and (2)(i)(a)
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+test1 <- left_join(judgment_bad_conditions, judgment_no_bad_conditions, by = "judgment") %>% 
+  transmute(bad_conditions = n.x, no_bad_conditions = n.y) %>%
+  head(2)
+
+```
+
+
+(1)(a) and (2)(ii)(a)  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+test2 <- left_join(judgment_bad_conditions_mult_stip, judgment_no_bad_conditions, by = "judgment") %>% 
+  transmute(bad_conditions_mult_stip = n.x, no_bad_conditions = n.y) %>%
+  head(2)
+
+```
+
+
+(1)(b) and (2)(i)(b)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_to_pay <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay)  
+
+t_avg_days_to_pay4 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) 
+
+t.test(as.numeric(t_avg_days_to_pay$days_to_pay), as.numeric(t_avg_days_to_pay4$days_to_pay))
+```
+
+
+(1)(b) and (2)(ii)(b)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+
+t_avg_days_to_pay7 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay)
+
+t.test(as.numeric(t_avg_days_to_pay$days_to_pay), as.numeric(t_avg_days_to_pay7$days_to_pay))
+
+```
+
+(1)(c) and (2)(i)(c)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_to_pay2 <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay)
+
+t_avg_days_to_pay5 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes"), judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay)
+
+t.test(as.numeric(t_avg_days_to_pay2$days_to_pay), as.numeric(t_avg_days_to_pay5$days_to_pay))
+```
+
+
+(1)(c) and (2)(ii)(c)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_to_pay8 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes"), judgment %in% c("Yes")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay)
+
+t.test(as.numeric(t_avg_days_to_pay2$days_to_pay), as.numeric(t_avg_days_to_pay8$days_to_pay))
+```
+
+(1)(d) and (2)(i)(d)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_to_pay3 <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT")) %>%
+  drop_na(days_to_pay)
+
+t_avg_days_to_pay6 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes"), judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay)
+
+t.test(as.numeric(t_avg_days_to_pay3$days_to_pay), as.numeric(t_avg_days_to_pay6$days_to_pay))
+
+```
+
+
+(1)(d) and (2)(ii)(d)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_to_pay9 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes"), judgment %in% c("No")) %>%
+  replace_with_na_at(.vars = c("days_to_pay"), condition = ~.x %in% c("DISCON", "pay agreement", "DEFAULT", "MOVEOUT", "TRIAL", "Yes")) %>%
+  drop_na(days_to_pay) 
+
+t.test(as.numeric(t_avg_days_to_pay3$days_to_pay), as.numeric(t_avg_days_to_pay9$days_to_pay))
+```
+
+(1)(e) and (2)(i)(e)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_ans_to_stip <- cases_all_info %>%
+  mutate(no_viols = (n_b_viols == 0 & n_c_viols == 0)) %>%
+  filter(no_viols == TRUE, repairs_in_answer %in% c("No"), repairs_in_stip %in% c("No"), !(date_of_stip %in% c("DEFAULT", "UNCLEAR", "DISMISSED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+         days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days"))
+
+t_avg_days_ans_to_stip2 <- cases_all_info %>%
+  filter(repairs_in_stip %in% c("Yes"), !(date_of_stip %in% c("DEFAULT", "UNCLEAR", "DISMISSED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+         days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days")) %>%
+  drop_na(date_answer)
+
+t.test(as.numeric(t_avg_days_ans_to_stip$days_ans_to_stip), as.numeric(t_avg_days_ans_to_stip2$days_ans_to_stip))
+```
+
+
+(1)(e) and (2)(ii)(e)  
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+t_avg_days_ans_to_stip3 <- cases_all_info %>%
+  filter(repairs_in_multiple_stips_stip_osc %in% c("Yes"), repairs_in_answer %in% c("Yes"), !(date_of_stip %in% c("DEFAULT", "UNCLEAR", "DISMISSED"))) %>%
+  mutate(date_answer = mdy(date_answer), 
+         date_of_stip = mdy(date_of_stip),
+         days_ans_to_stip = difftime(date_of_stip, date_answer, units = "days")) %>%
+  drop_na(date_answer) 
+
+t.test(as.numeric(t_avg_days_ans_to_stip$days_ans_to_stip), as.numeric(t_avg_days_ans_to_stip3$days_ans_to_stip))
+```
+
+
